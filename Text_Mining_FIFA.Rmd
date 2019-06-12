@@ -1,0 +1,359 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r, warning=FALSE, message=FALSE}
+# Import some libraries
+library(twitteR)
+library("tm")
+```
+```{r}
+#read data
+df_fifa <- read.csv("FIFA.csv", header = TRUE, na.strings = c(""))
+head(df_fifa)
+
+```
+```{r}
+colnames(df_fifa)
+```
+
+# check missing values
+```{r}
+
+summary(df_fifa)
+str(df_fifa)
+```
+We saw there are missing values(NAs) for Tweet ,Hashtags, UserMentionNames,UserMentionID, Nmae, Place. We will remove all records with missing values. We have 530000 records on this dataset, we are confident that removeing all missing values will not bring any damages on the quality of the dataset.
+```{r}
+
+# remove rows with missing values in Tweet
+df_fifa[is.na(df_fifa$Tweet),]
+```
+```{r}
+df_fifa <- df_fifa[!is.na(df_fifa$Tweet),]
+
+```
+
+```{r}
+# checking missing values in Hashtags
+df_fifa[is.na(df_fifa$Hashtags),]
+
+```
+```{r}
+# Remove all records with missing values in Hashtags
+df_fifa <- df_fifa[!is.na(df_fifa$Hashtags),]
+```
+```{r}
+# checking missing values in UserMentionNames
+df_fifa[is.na(df_fifa$UserMentionNames),]
+```
+```{r}
+#remove all records with missing values in UserMentionNames
+df_fifa <- df_fifa[!is.na(df_fifa$UserMentionNames),]
+```
+```{r}
+# checking missing values in UserMentionID
+df_fifa[is.na(df_fifa$UserMentionID),]
+```
+```{r}
+# checking missing values in Name
+df_fifa[is.na(df_fifa$Name),]
+```
+```{r}
+#remove all records with missing values in Name
+df_fifa <- df_fifa[!is.na(df_fifa$Name),]
+```
+```{r}
+# checking missing values in Place
+df_fifa[is.na(df_fifa$Place),]
+```
+```{r}
+#remove all records with missing values in Place
+df_fifa <- df_fifa[!is.na(df_fifa$Place),]
+```
+```{r}
+# check if there are still some missing values in the dataset?
+df_fifa[!complete.cases(df_fifa),]
+
+```
+After cleaning missing values, the dataset is clean and without missing valuse. The size of dataset is about 60% of orginal dataset, which is still a large dataset.
+
+
+```{r, message=FALSE, warning=FALSe}
+# to speed up the compuation time, we will only use about 40% of the dataset
+library(dplyr)
+set.seed(1)
+
+df_fifa <- sample_n(df_fifa, 110000)
+fifa_bkp <- df_fifa
+
+```
+```{r}
+
+cat('Number of df_fifa (after): ', nrow(df_fifa))
+```
+
+```{r}
+# Build corpus
+
+corpus <- iconv(df_fifa$Orig_Tweet, to = "utf-8-mac")
+
+corpus <- Corpus(VectorSource(corpus))
+inspect(corpus[1:5])
+```
+
+```{r}
+# clean text: putting text to lower case
+corpus <- tm_map(corpus,tolower)
+inspect(corpus[1:5])
+
+```
+
+```{r}
+# clean text: remove all punctuation
+corpus <- tm_map(corpus, removePunctuation)
+inspect(corpus[1:5])
+```
+
+```{r}
+# clean text: remove words don't have much meanings
+cleanset <- tm_map(corpus,removeWords,stopwords('english'))
+inspect(cleanset[1:5])
+```
+
+```{r}
+# clean text: remove URL
+removeURL <- function(x) gsub('http[[:alnum:]]*', '',x)
+cleanset <- tm_map(cleanset, content_transformer(removeURL))
+inspect(cleanset[1:5])
+```
+```{r}
+# clean text: remove white spaces
+cleanset <- tm_map(cleanset,stripWhitespace)
+inspect(cleanset[1:5])
+```
+
+
+
+
+```{r}
+# need to convert to structured data: term document matrix
+tdm <- TermDocumentMatrix(cleanset, control = list(stemming=TRUE))
+tdm
+```
+```{r}
+#find all total number of terms(this will take several minutes due to the large documents)
+
+w <- rowSums(as.matrix(tdm))
+```
+```{r}
+length(w)
+```
+```{r}
+#calculate word frequencies
+# create sort order (asc)
+ord <- order(w,decreasing = TRUE)
+```
+```{r}
+# inspect most request occurring terms
+w[head(ord)]
+```
+```{r}
+# inspect least frequestly occurring terms
+w[tail(ord)]
+```
+
+
+```{r}
+# histogram for terms occurrences.
+wf =data.frame(term =names(w), occurrences =w)
+```
+```{r}
+library(ggplot2)
+# we subset the dataframe which is for terms occurrence more than 1500 times(we are having 30450 terms in the dataset)
+p <- ggplot(subset(wf, w >= 1500), aes(term, occurrences))
+p <- p +geom_bar(stat = "identity")
+p <- p + theme(axis.text.x=element_text(angle =45, hjust = 1))
+p
+```
+Use wordcloud to visualze the popluar terms
+
+```{r}
+#calculate word frequencies
+freqs <- sort(w,decreasing = TRUE)
+
+```
+
+
+```{r, message=FALSE}
+# load lirbary
+library("wordcloud")
+```
+
+```{r}
+# plot wordcloud
+set.seed(222)
+wordcloud(words = names(freqs),freq = freqs,max.words = 150,random.order = FALSE,
+          min.freq = 20, colors = brewer.pal(8,"Dark2"),
+          scale = c(5, 0.3)
+          )
+
+```
+The bigest word is worldcup, that means the most frenqucy word to be used in the text, which is totally make sense as they were worlcup twitters. The smallest words mean least frenqucy words to be used in the text.
+
+```{r}
+# another option is wordcloud2
+library(wordcloud2)
+```
+```{r}
+freqs <- data.frame(names(freqs),freqs)
+colnames(freqs) <- c('word','freq')
+```
+```{r}
+head(freqs)
+```
+```{r}
+# create a wordcloud2
+wordcloud2(freqs,
+           size = 0.8,
+           shape = 'star',
+           rotateRatio = 0.5,
+           minSize = 1)
+
+```
+
+```{r}
+#frequet terms. list most fequest terms. Lower bound specified as the second argument.
+findFreqTerms(tdm,lowfreq = 500)
+
+```
+
+```{r}
+# associations. We can use this function to find correlations. Let's pick up some words to check: arriv, feel, glove as examples # to see their correlations with other words. 0.50 is a paremeter to tell the correlation limit.
+findAssocs(tdm,"arriv", 0.50)
+```
+```{r}
+findAssocs(tdm,"feel", 0.50)
+```
+```{r}
+findAssocs(tdm,"glove", 0.50)
+```
+```{r}
+# Lets get a dendrogram to see related terms
+#Remove sparse(infrequently used)terms from the term-document matrix
+
+fifa2tdm <- removeSparseTerms(tdm, sparse = 0.9)
+```
+
+```{r}
+# Scale the data
+fifa2tdmscale <- scale(fifa2tdm)
+```
+
+```{r}
+# distance matrix
+fifadist <- dist(fifa2tdmscale, method ="euclidean")
+```
+
+```{r}
+# hierarchial clustering
+fifafit <-hclust(fifadist)
+```
+```{r}
+# visualize the result
+plot(fifafit)
+```
+```{r}
+# to calculate a certain number of groups
+cutree(fifafit, k =5)
+
+```
+```{r, message=FASLE, warning=FALSE}
+#sentiment analysis
+# libary some packages
+library(syuzhet)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(stringr)
+library(plyr)
+
+```
+```{r}
+# Obtain sentiment scores, due to the large tweets, we will only look at 5000 tweets.
+set.seed(1)
+tweets_5000 <- sample_n(fifa_bkp, 5000)
+```
+```{r}
+
+tweets <- iconv(tweets_5000$Orig_Tweet, to = 'utf-8-mac')
+fifa_score <- get_nrc_sentiment(tweets)
+```
+```{r}
+head(fifa_score)
+```
+```{r}
+#create Bar Plot to visualize each words.
+barplot (colSums(fifa_score),
+        las =2,
+        col = rainbow(10),
+        ylab = 'Count',
+        main ='Sentiment Scores for FIFA 2018 Tweets')
+```
+##below is another approach. I haven't finish it. please just leave it out
+
+
+```{r}
+# import postive and negative words: Hu Liu Lexicon got the standard of sentiment analysist and manually #created list of pos and negative words
+pos <- readLines("Positive-Words.txt")
+neg <- readLines("Negative-Words.txt")
+
+```
+```{r}
+# function score.sentiment
+score.sentiment <- function(sentences, pos.words, neg.words, .progress ='none')
+{
+scores <- laply(sentences,
+                function(sentence, pos.words, neg.words)
+                {
+                 sentence <- gsub("[[:punct:]]", "",sentence)
+                 sentence <- gsub("[[:cntrl:]]", "",sentence)
+                 sentence <- gsub("\\d+", "", sentence)
+                 tryTolower <- function(x)
+                 {
+                  y = NA
+                  try-error = tryCatch(tolower(x), error= function(e) e)
+                  if (!inherits(try_error, "error"))
+                  return(y)
+
+                 }
+                 sentence = sapply(sentence, tryTolower)
+                 word.list = str_split(sentence, "\\s+")
+                 words =unlist(word.list)
+
+                 pos.matches = match(words, pos.words)
+                 neg.matches = match(words, neg.words)
+
+                 score = sum(pos.matches) - sum(neg.matches)
+                 return(score)
+
+
+
+                }, pos.words, neg.words, .progress =.progress)
+scores.df = data.frame(Orig_Tweet =sentences, score = scores)
+return(scores.df)
+
+}
+```
